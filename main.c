@@ -20,19 +20,20 @@
 // Required tools and typedefinitions //
 
 typedef struct{
-	char *fields;
-	char **values;
+	char *fields; // fromatted string containing the data fields
+	char **values; // formatted datastrings
 } data_t;
 
 typedef struct{
-	data_t data;
-	char tag[20];
-	char html_f[10];
-	unsigned int cnt;
-	unsigned int left;
-	char* (*parseFunc)(void *);
+	data_t data; // Data to be rendered
+	char tag[20]; // Tag to be replaced in html template
+	char html_f[10]; // html tags to be added to the data for rendering
+	unsigned int cnt; // how many datastrings contained in package
+	unsigned int left; // how many datastrings left unprocessed
+	char* (*parseFunc)(void *); // function used for rendering datastrings
 } tag;
 
+// typedefinition for easier utilization of function pointer
 typedef char* (*parseFunc)(tag);
 
 // Takes taglines from given data and forms
@@ -115,8 +116,10 @@ char *render_html(char *path, ...){
 			
 			// 'processed' datablock is now processed
 			// so it is cleaned and a new one is loaded
-			free(processed.data.values);
-			processed = va_arg(templatetags, tag);
+			if (processed.cnt > 0) {
+				free(processed.data.values);
+				processed = va_arg(templatetags, tag);
+			}
 		}
 		
 		// if line contains no tags
@@ -137,6 +140,7 @@ char *render_html(char *path, ...){
 	}
 	
 	// the finished render is returned as valid html document
+	fclose(fp);
 	return render;
 }
 
@@ -152,69 +156,6 @@ char *handle_HTTP(char *request){
 }
 
 int main(int argc, char *argv[]){
-	
-	// TEST DATA //
-	// creation of some data packets for rendering
-	char **data1 = calloc(1, sizeof(char*));
-	char *content1 = calloc(10, sizeof(char));
-	strcpy(content1, "Titlehere");
-	data1[0] = content1;
-	tag num1;
-	num1.parseFunc = parseTag;
-	num1.data.fields = NULL;
-	num1.data.values = data1;
-	num1.cnt = 1;
-	num1.left = 1;
-	strcpy(num1.tag, "{%%TITLE%%}");
-	strcpy(num1.html_f, "title");
-	
-	char **data2 = calloc(1, sizeof(char*));
-	char *content2 = calloc(10, sizeof(char));
-	strcpy(content2, "Some Head");
-	data2[0] = content2;
-	tag num2;
-	num2.parseFunc = parseTag;
-	num2.data.fields = NULL;
-	num2.data.values = data2;
-	num2.cnt = 1;
-	num2.left = 1;
-	strcpy(num2.tag, "{%%HEADER%%}");
-	strcpy(num2.html_f, "h1");
-	
-	char **data3 = calloc(4, sizeof(char*));
-	char *content3_1 = calloc(10, sizeof(char));
-	strcpy(content3_1, "autogen 1");
-	char *content3_2 = calloc(10, sizeof(char));
-	strcpy(content3_2, "autogen 2");
-	char *content3_3 = calloc(10, sizeof(char));
-	strcpy(content3_3, "autogen 3");
-	char *content3_4 = calloc(10, sizeof(char));
-	strcpy(content3_4, "autogen 4");
-	data3[0] = content3_1;
-	data3[1] = content3_2;
-	data3[2] = content3_3;
-	data3[3] = content3_4;
-	tag num3;
-	num3.parseFunc = parseTag;
-	num3.data.fields = NULL;
-	num3.data.values = data3;
-	num3.cnt = 4;
-	num3.left = 4;
-	strcpy(num3.tag, "{%%CONTENT%%}");
-	strcpy(num3.html_f, "p");
-	
-	// Ending packet so rendering function knows when to stop
-	tag end;
-	end.parseFunc = NULL;
-	end.cnt = 0;
-	end.left = 0;
-	end.data.fields = NULL;
-	end.data.values = NULL;
-	
-	// A debug print
-	//printf("%s", render_html("./files/index.html", num1, num2, num3, end));
-	
-	// TEST DATA ENDS //
 	
 	// REQ CTRL //
 	
@@ -242,12 +183,79 @@ int main(int argc, char *argv[]){
 	char ret[4096];
 	char *response;
 	char httpresponse[4096];
+	memset(httpresponse, 0, 4096);
+	// ^^^ MEMSET THIS!!
 	
 	// Server runloop
 	while(1){
 		
+		// TEST DATA //
+		// creation of some data packets for rendering
+		char **data1 = calloc(1, sizeof(char*));
+		char *content1 = calloc(10, sizeof(char));
+		strcpy(content1, "Titlehere");
+		data1[0] = content1;
+		tag num1;
+		num1.parseFunc = parseTag;
+		num1.data.fields = NULL;
+		num1.data.values = data1;
+		num1.cnt = 1;
+		num1.left = 1;
+		strcpy(num1.tag, "{%%TITLE%%}");
+		strcpy(num1.html_f, "title");
+		
+		char **data2 = calloc(1, sizeof(char*));
+		char *content2 = calloc(10, sizeof(char));
+		strcpy(content2, "Some Head");
+		data2[0] = content2;
+		tag num2;
+		num2.parseFunc = parseTag;
+		num2.data.fields = NULL;
+		num2.data.values = data2;
+		num2.cnt = 1;
+		num2.left = 1;
+		strcpy(num2.tag, "{%%HEADER%%}");
+		strcpy(num2.html_f, "h1");
+		
+		char **data3 = calloc(4, sizeof(char*));
+		char *content3_1 = calloc(10, sizeof(char));
+		strcpy(content3_1, "autogen 1");
+		char *content3_2 = calloc(10, sizeof(char));
+		strcpy(content3_2, "autogen 2");
+		char *content3_3 = calloc(10, sizeof(char));
+		strcpy(content3_3, "autogen 3");
+		char *content3_4 = calloc(10, sizeof(char));
+		strcpy(content3_4, "autogen 4");
+		data3[0] = content3_1;
+		data3[1] = content3_2;
+		data3[2] = content3_3;
+		data3[3] = content3_4;
+		tag num3;
+		num3.parseFunc = parseTag;
+		num3.data.fields = NULL;
+		num3.data.values = data3;
+		num3.cnt = 4;
+		num3.left = 4;
+		strcpy(num3.tag, "{%%CONTENT%%}");
+		strcpy(num3.html_f, "p");
+		
+		// Ending packet so rendering function knows when to stop
+		tag end;
+		end.parseFunc = NULL;
+		end.cnt = 0;
+		end.left = 0;
+		end.data.fields = NULL;
+		end.data.values = NULL;
+		
+		// A debug print
+		//printf("%s", render_html("./files/index.html", num1, num2, num3, end));
+		
+		// TEST DATA ENDS //
+		
 		// blocks until client sends request
 		clientat = accept(localsocket, NULL, NULL);
+		
+		printf("Execution begun\n");
 		
 		// receives client first request
 		recv(clientat, &ret, sizeof(ret), 0);
@@ -259,7 +267,7 @@ int main(int argc, char *argv[]){
 		sprintf(httpresponse, "%s%s\r\n\r\n", header, response);
 		
 		//Debug print
-		//printf("%s\n\n", httpresponse);
+		printf("%s\n\n", httpresponse);
 		
 		// Sends the response
 		send(clientat, httpresponse, sizeof(httpresponse), 0);
