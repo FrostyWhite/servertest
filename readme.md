@@ -11,9 +11,9 @@ Run the server program and the navigate to the address 127.0.0.1:8001
 rendered into the html template at _files/index.html_.
 
 __Notes:__
-At the current stage only one connection is accepted at a time. The code
-also renders some junk data at the end of the template, the code doesn't
-for now support rendering html from file either. This version is mainly at
-the 'proof of concept' stage.
+At the current stage only one connection is accepted at a time (and only
+within the computer). The code also renders some junk data at the end of
+the template, the code doesn't, for now, support rendering html from file
+either. This version is mainly at the 'proof of concept' stage.
 
 Forementioned issues will be corrected in the near future.
