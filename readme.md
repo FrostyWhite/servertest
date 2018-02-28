@@ -16,3 +16,6 @@ within the computer). The code doesn't, for now, support rendering html from fil
 This version is currently at the 'proof of concept' stage.
 
 Forementioned issues will be corrected in the near future.
+
+__Changelog:__<br>
+28.2. Added function for handling HTTP requests. Functionality is not yet used and functions for removing and actually using generated header struct is still under work.
