@@ -255,10 +255,10 @@ int main(int argc, char *argv[]){
 		// blocks until client sends request
 		clientat = accept(localsocket, NULL, NULL);
 		
-		printf("Execution begun\n");
-		
 		// receives client first request
 		recv(clientat, &ret, sizeof(ret), 0);
+		
+		printf("%s", ret);
 		
 		// renders a responce html document
 		response = render_html("./files/index.html", num1, num2, num3, end);
@@ -267,7 +267,7 @@ int main(int argc, char *argv[]){
 		sprintf(httpresponse, "%s%s\r\n\r\n", header, response);
 		
 		//Debug print
-		printf("%s\n\n", httpresponse);
+		//printf("%s\n\n", httpresponse);
 		
 		// Sends the response
 		send(clientat, httpresponse, sizeof(httpresponse), 0);
