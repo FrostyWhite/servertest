@@ -2,6 +2,9 @@
 
 __5.3.2018: DataFromFileUnit:__<br>
 Contains unfinished code for creating data packages for the HTML renderer to work with. Creates packages from the lines of a given file by formatting them and collecting them into a single structure. Biggest issue is dealing with the formatting options.
+
+#### Update:
+The unit now works correctly. Memorychecks will be done later
 <br>
 <br>
 ### Plans:<br>

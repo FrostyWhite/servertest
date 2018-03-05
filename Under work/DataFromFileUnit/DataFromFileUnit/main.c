@@ -65,7 +65,7 @@ int *hiddenWriteFromSource(const char *source, char *target, const hidden_format
 	int space = settings->flags & 4;
 	unsigned int targetstep = 0;
 	unsigned int sourcestep = 0;
-	while(targetstep <= settings->width && *source != delim){
+	while(targetstep < settings->width && *source != delim){
 		if((sign || space) && (*source >= 49 && *source <= 57)){
 			target--;
 			if(*target != '-'){
@@ -83,15 +83,27 @@ int *hiddenWriteFromSource(const char *source, char *target, const hidden_format
 		}
 	}
 	sourcestep = targetstep;
-	if(targetstep < settings->width) {
+	if(targetstep >= settings->width) {
 		while(*source != delim){
 			source++; sourcestep++;
 		}
 		source++; sourcestep++;
 	}
+	else{
+		source++; sourcestep++;
+	}
 	ret[0] = targetstep;
 	ret[1] = sourcestep;
 	return ret;
+}
+
+int hiddenNonFormattedWrite(const char *source, char *target, const char delim){
+	int step = 0;
+	while(*source != delim){
+		*target = *source;
+		target++; source++; step++;
+	}
+	return step;
 }
 
 //  go through format string:
@@ -106,8 +118,10 @@ int hiddenFormatLine(const char *source, char *target, const char *format, char 
 	hidden_format_t settings = hiddenCreateFormat();
 	const char *tmp = NULL;
 	while (*format) {
+		hiddenResetFormat(&settings);
 		switch (*format) {
 			case '%':
+				format++;
 				while (!settings.type) {
 					if(!settings.width){
 						switch (*format) {
@@ -150,10 +164,10 @@ int hiddenFormatLine(const char *source, char *target, const char *format, char 
 					else{
 						switch (*format) {
 							case 'l':
-								settings.type = 1; // Maximum
+								settings.type = 1; // Low bound
 								break;
 							case 'h':
-								settings.type = 2; // Minimum
+								settings.type = 2; // High bound
 								break;
 							case 'a':
 								settings.type = 3; // Absolute
@@ -168,16 +182,19 @@ int hiddenFormatLine(const char *source, char *target, const char *format, char 
 						format++;
 					}
 				}
-				if(settings.width < 0){
-					while(*source != delim){
-						*target = *source;
-						target++; source++;
-					}
+				if(settings.width < 0 || settings.type == 4){
+					int skip = hiddenNonFormattedWrite(source, target, delim);
+					source += skip; target += skip;
 					source++;
 				} else {
 					int fit = settings.width - hiddenCharsToDelim(source, delim);
 					if(fit > 0){
-						if(settings.flags & 1){
+						if(settings.type == 2) {
+							int skip = hiddenNonFormattedWrite(source, target, delim);
+							source += skip; target += skip;
+							source++;
+						}
+						else if(settings.flags & 1){
 							int *adv = hiddenWriteFromSource(source, target, &settings, delim);
 							target += adv[0];
 							source += adv[1];
@@ -193,10 +210,16 @@ int hiddenFormatLine(const char *source, char *target, const char *format, char 
 							free(adv);
 						}
 					} else {
-						int *adv = hiddenWriteFromSource(source, target, &settings, delim);
-						target += adv[0];
-						source += adv[1];
-						free(adv);
+						if(settings.type == 1){
+							int skip = hiddenNonFormattedWrite(source, target, delim);
+							source += skip; target += skip;
+							source++;
+						} else {
+							int *adv = hiddenWriteFromSource(source, target, &settings, delim);
+							target += adv[0];
+							source += adv[1];
+							free(adv);
+						}
 					}
 				}
 				break;
@@ -238,8 +261,7 @@ tag_t makeEnd(){
 }
 
 tag_t dataFromFile(char *base, char *tag, char *html_t, char *format){
-	tag_t new; int linei = 0; char *tmp;
-	int tmpi = 0; char **hold;
+	tag_t new; int linei = 0; int count = 0;
 	FILE *file = fopen(base, "r");
 	if(!file) return makeEnd();
 	data_t data;
@@ -247,13 +269,34 @@ tag_t dataFromFile(char *base, char *tag, char *html_t, char *format){
 	memset(line, 0, 256);
 	fgets(line, 255, file);
 	if(strstr(line, "%FIELDS%") == line){
-		linei += 7;
+		linei += 8;
 		data.fields = calloc(1024, sizeof(char));
-		hiddenFormatLine(&line[linei], data.fields, "", ';');
+		hiddenFormatLine(&line[linei], data.fields, format, ';');
+		memset(line, 0, 256);
+		fgets(line, 255, file);
 	}
-	return makeEnd();
+	data.values = NULL;
+	do {
+		data.values = realloc(data.values, (count + 1) * sizeof(char*));
+		data.values[count] = calloc(512, sizeof(char));
+		hiddenFormatLine(line, data.values[count], format, ';');
+		count++;
+		memset(line, 0, 256);
+	} while (fgets(line, 255, file));
+	new.data = data;
+	new.cnt = count;
+	new.left = count;
+	strcpy(new.html_f, html_t);
+	strcpy(new.tag, tag);
+	new.parseFunc = NULL;
+	return new;
 }
 
 int main(int argc, char *argv[]){
+	tag_t packets = dataFromFile("./characters", "{%%CONTENT%%}", "p", "%-15a %-20l %-20h");
+	printf("%s\n", packets.data.fields);
+	for(int i = 0; i < packets.left; i++){
+		printf("%s\n", packets.data.values[i]);
+	}
 	return 0;
 }
