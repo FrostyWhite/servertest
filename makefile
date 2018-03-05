@@ -1,9 +1,9 @@
 CC=gcc
 Cflags=-I -Wall -std=c99 -pedantic -ptheread
 
-Server: ./main.c
+Server: ./source/main.c
 	@echo
-	$(CC) -o server ./main.c
+	$(CC) -o server ./source/main.c
 	@echo $@ compiled
 	@echo
 
