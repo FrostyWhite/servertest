@@ -17,133 +17,8 @@
 #include <fcntl.h>
 #include <stdarg.h>
 
-// Required tools and typedefinitions //
-
-typedef struct{
-	char *fields; // fromatted string containing the data fields
-	char **values; // formatted datastrings
-} data_t;
-
-typedef struct{
-	data_t data; // Data to be rendered
-	char tag[20]; // Tag to be replaced in html template
-	char html_f[10]; // html tags to be added to the data for rendering
-	unsigned int cnt; // how many datastrings contained in package
-	unsigned int left; // how many datastrings left unprocessed
-	char* (*parseFunc)(void *); // function used for rendering datastrings
-} tag;
-
-// typedefinition for easier utilization of function pointer
-typedef char* (*parseFunc)(tag);
-
-// Takes taglines from given data and forms
-// html tagged lines out of them
-// *** TODO: FIX left update issue here and in render_html ***
-char *parseTag(void *p_task){	// The basic parse function
-	
-	// typecast datapacket
-	tag *task = (tag *) p_task;
-	
-	// Determine whether a field specification header is required
-	char *data = (task->data.fields != NULL) ? task->data.fields : task->data.values[task->cnt - task->left];
-	
-	// Allocate memory for the html line and form the line
-	char *parsed = calloc((2 * strlen(task->html_f) + strlen(data) + 7), sizeof(char));
-	sprintf(parsed, "<%s>%s</%s>", task->html_f, data, task->html_f);
-	
-	// If there was a field specification line it is now
-	// processed and is NULLed so that it won't get printed again
-	if(task->data.fields != NULL){
-		free(task->data.fields);
-		task->data.fields = NULL;
-	}
-	return parsed;
-}
-
-// Renders the html document at 'path'
-// filling it with the given data
-
-char *render_html(char *path, ...){
-	// block length of memoryallocations
-	const unsigned int buffersize = 2048;
-	
-	// setting up the variable argument list
-	va_list templatetags;
-	va_start(templatetags, path);
-	
-	// setting up resources
-	FILE *fp = fopen(path, "r");
-	char *render = calloc(buffersize, sizeof(char));
-	unsigned int left = buffersize;
-	
-	// picking the first va argument
-	tag processed = va_arg(templatetags, tag);
-	
-	char line[256]; // Lines can't realistically be this long
-	
-	// Reads the template line by line
-	while (fgets(line, 255, fp) != NULL) {
-		char *loc = 0;
-		
-		// if the tag given in 'processed' is found
-		if ((loc = strstr(line, processed.tag))){
-			
-			// processes as many text blocks as there are in the
-			// 'processed' datablock
-			while(processed.left > 0){
-				
-				// Calculates some stuff with indices
-				int index = (int) (loc - line);
-				char *tagdata = processed.parseFunc(&processed);
-				int linelen = (int) (strlen(line) - strlen(processed.tag) + strlen(tagdata));
-				
-				// Allocates more data if necessary
-				while(left < linelen){
-					render = realloc(render, sizeof(render) + buffersize * sizeof(char));
-					left += buffersize;
-				}
-				
-				// writes the data into the render
-				strncat(render, line, index);
-				strcat(render, tagdata);
-				strcat(render, (loc + strlen(tagdata)));
-				strcat(render, "\n");
-				
-				// cleans up data that is no longer needed
-				free(processed.data.values[processed.cnt - processed.left]);
-				processed.left--;
-			}
-			
-			// 'processed' datablock is now processed
-			// so it is cleaned and a new one is loaded
-			if (processed.cnt > 0) {
-				free(processed.data.values);
-				processed = va_arg(templatetags, tag);
-			}
-		}
-		
-		// if line contains no tags
-		else {
-			
-			// more memory is allocated if necessary
-			while(left < strlen(line)){
-				render = realloc(render, sizeof(render) + buffersize * sizeof(char));
-				left += buffersize;
-			}
-			
-			// the line is written into render
-			strcat(render, line);
-		}
-		
-		// the line gets reset for reading another line
-		memset(line, 0, 256);
-	}
-	
-	// the finished render is returned as valid html document
-	fclose(fp);
-	return render;
-}
-
+#include "render.h"
+#include "HTTPReq.h"
 
 // Implementation in progress
 char *handle_HTTP(char *request){
@@ -195,7 +70,7 @@ int main(int argc, char *argv[]){
 		char *content1 = calloc(10, sizeof(char));
 		strcpy(content1, "Titlehere");
 		data1[0] = content1;
-		tag num1;
+		tag_t num1;
 		num1.parseFunc = parseTag;
 		num1.data.fields = NULL;
 		num1.data.values = data1;
@@ -208,7 +83,7 @@ int main(int argc, char *argv[]){
 		char *content2 = calloc(10, sizeof(char));
 		strcpy(content2, "Some Head");
 		data2[0] = content2;
-		tag num2;
+		tag_t num2;
 		num2.parseFunc = parseTag;
 		num2.data.fields = NULL;
 		num2.data.values = data2;
@@ -217,35 +92,10 @@ int main(int argc, char *argv[]){
 		strcpy(num2.tag, "{%%HEADER%%}");
 		strcpy(num2.html_f, "h1");
 		
-		char **data3 = calloc(4, sizeof(char*));
-		char *content3_1 = calloc(10, sizeof(char));
-		strcpy(content3_1, "autogen 1");
-		char *content3_2 = calloc(10, sizeof(char));
-		strcpy(content3_2, "autogen 2");
-		char *content3_3 = calloc(10, sizeof(char));
-		strcpy(content3_3, "autogen 3");
-		char *content3_4 = calloc(10, sizeof(char));
-		strcpy(content3_4, "autogen 4");
-		data3[0] = content3_1;
-		data3[1] = content3_2;
-		data3[2] = content3_3;
-		data3[3] = content3_4;
-		tag num3;
-		num3.parseFunc = parseTag;
-		num3.data.fields = NULL;
-		num3.data.values = data3;
-		num3.cnt = 4;
-		num3.left = 4;
-		strcpy(num3.tag, "{%%CONTENT%%}");
-		strcpy(num3.html_f, "p");
+		tag_t render = dataFromFile("./database/characters", "{%%CONTENT%%}", "p", "%-15a %-+20a %-20a");
 		
 		// Ending packet so rendering function knows when to stop
-		tag end;
-		end.parseFunc = NULL;
-		end.cnt = 0;
-		end.left = 0;
-		end.data.fields = NULL;
-		end.data.values = NULL;
+		tag_t end = makeEnd();
 		
 		// A debug print
 		//printf("%s", render_html("./files/index.html", num1, num2, num3, end));
@@ -261,7 +111,7 @@ int main(int argc, char *argv[]){
 		printf("%s", ret);
 		
 		// renders a responce html document
-		response = render_html("./files/index.html", num1, num2, num3, end);
+		response = render_html("./files/index.html", num1, num2, render, end);
 		
 		// forms the actual http responce
 		sprintf(httpresponse, "%s%s\r\n\r\n", header, response);

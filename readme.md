@@ -12,10 +12,11 @@ rendered into the html template at _files/index.html_.
 
 __Notes:__<br>
 At the current stage only one connection is accepted at a time (and only
-within the computer). The code doesn't, for now, support rendering html from data files.
-This version is currently at the 'proof of concept' stage.
+within the computer). Stylesheets or other files can currently not be loaded.
 
-Forementioned issues will be corrected in the near future.
+Forementioned issues will be corrected in the near future. This project is mainly a personal experiment and will
+improve little by little as I come up with new ways to expand it.
 
 __Changelog:__<br>
 28.2. Added function for handling HTTP requests. Functionality is not yet used and functions for removing and actually using generated header struct are still under work.
+6.3. An html document can now be rendered from data contained in a file

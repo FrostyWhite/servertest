@@ -25,8 +25,12 @@ typedef struct{
 
 req_t *HTTPCreate(char *request);
 
-int HTTPDelete(req_t toDelete);
+void HTTPDelete(req_t *toDelete);
 
-int HTTPFind(req_t source, char *field);
+char *HTTPFind(req_t *request, char *field);
+
+int HTTPStrSeek(char *content, char *value);
+
+int HTTPReqSeek(req_t *request, char *field, char *value);
 
 #endif /* HTTPReq_h */

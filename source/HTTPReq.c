@@ -55,6 +55,43 @@ req_t *HTTPCreate(char *request){
 		newfield.content[fieldi] = 0;
 		ptr += 2; fieldi = 0;
 		target->additionals[line - 1] = newfield;
+		line++;
 	}
+	field_t *hold = realloc(target->additionals, line * sizeof(field_t));
+	if(hold) target->additionals = hold;
+	else return NULL;
+	field_t newfield = {"end", "\0"};
+	target->additionals[line - 1] = newfield;
 	return target;
+}
+
+void HTTPDelete(req_t *toDelete){
+	free(toDelete->additionals);
+	free(toDelete);
+	return;
+}
+
+char *HTTPFind(req_t *request, char *field){
+	for(int i = 0; strcmp(request->additionals[i].field, "end"); i++){
+		if(!strcmp(request->additionals[i].field, field)){
+			return request->additionals[i].content;
+		}
+	}
+	return NULL;
+}
+
+int HTTPStrSeek(char *content, char *value){
+	return (strstr(content, value)) ? 1 : 0;
+}
+
+int HTTPReqSeek(req_t *request, char *field, char *value){
+	char *found = NULL;
+	for(int i = 0; strcmp(request->additionals[i].field, "end"); i++){
+		if(!strcmp(request->additionals[i].field, field)){
+			found = request->additionals[i].content;
+			break;
+		}
+	}
+	if(!found) return 0;
+	return HTTPStrSeek(found, value);
 }
