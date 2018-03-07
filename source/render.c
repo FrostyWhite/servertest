@@ -210,6 +210,40 @@ tag_t dataFromFile(char *base, char *tag, char *html_t, char *format){
 	return new;
 }
 
+/*
+tag_t dataFromInput(char *tag, char *html_t, char *format, char *title, ...){
+	
+	tag_t new;
+	va_list va_strings;
+	va_start(va_strings, title);
+	int line_elements = 0;
+	int linei = 0; int count = 0;
+	char source[4096];
+	memset(source, 0, 4096);
+	
+	while(*format){
+		if(*format == '%' && *(format + 1) != '%') line_elements++;
+		format++;
+	}
+	
+	if(title) {
+		new.data.fields = calloc(1 + strlen(title), sizeof(char));
+		strcpy(new.data.fields, title);
+	}
+	
+	char *processed = va_arg(va_strings, char*);
+	while (processed) {
+		for(int le = 0; (le < line_elements) && processed; le++){
+			strcat(source, processed);
+			strcat(source, ";");
+			processed = va_arg(va_strings, char*);
+		}
+		hiddenFormatLine(source, , , )
+	}
+	return new;
+}
+*/
+
 ////
 //
 //	HIDDEN UTILITY FUNCTIONS
