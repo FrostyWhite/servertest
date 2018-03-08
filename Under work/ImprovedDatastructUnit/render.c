@@ -21,12 +21,13 @@ typedef struct{
 	int width;
 } hidden_format_t;
 
-hidden_format_t hiddenCreateFormat();
-int hiddenCharsToDelim(const char *string, char delim);
+// Initializes a new formatting options structure
+hidden_format_t hiddenInitFormat();
+
+// Clears the given formatting options structure
 void hiddenResetFormat(hidden_format_t *format);
-void hiddenWriteChars(char *target, int number, char character);
-int *hiddenWriteFromSource(const char *source, char *target, const hidden_format_t *settings);
-int hiddenNonFormattedWrite(const char *source, char *target);
+
+// Formats a list of strings
 int hiddenFormatLine(char **source, char *target, const char *format);
 
 ////
@@ -53,41 +54,70 @@ tag_t makeEnd(){
 }
 
 ////
-////	Creates a datapacket from a given file
+////	Creates a datapacket from a variable argument list
 ////
 //
-//	Creating resources
-//	Open file or return only an end tag
-//	If a title is marked in data file:
-//		Format line
-//		Reset line for a new read
-//	Loop through the file:
-//		Format the read line
-//		Reset the line for a new read
-//	Store the data inside the datapacket
-//	Return the datapacket
+//	Create resources
+//	Open file or return an end tag
+//	Count number of fields on a line
+//	Read a line from file
+//	If the line contains field tag:
+//		Skip over the tag
+//		Loop through the line until no more delimiters found:
+//			Set the delimiter 0 (split the line)
+//			Allocate space for the new field
+//			Copy the current line partial to the field list
+//			Set the start of the next partial behind the end of the last one
+//		Allocate space for a trailing NULL element
+//		Allocate space for tagstruck fields field
+//		Reset the line and read a new one
+//	Set up datagroup buffer
+//	Loop through each line of the file:
+//		Set the start of the first line partial to the beginning of the line
+//		Loop through the line until no more delimiters found:
+//			If datagroup buffer full:
+//				Allocate more space
+//				Clear allocated space
+//			If current datagroup slot not empty: clear slot
+//			Else: allocate space into the slot
+//			Set the delimiter 0 (split the line)
+//			Copy the current string partial to the current datagroup slot
+//			Set the start of the next partial behind the end of the last one
+//			(new line loaded)
+//		If datagroup buffer full:
+//			Allocate one more slot
+//			Null the slot
+//		Else: Null the current slot
+//		Allocate space to the datastruct
+//		Format the datagroup into the datastruct
+//	Free any used slots in the datagroup
+//	Free the datagroup
+//	Close the file
+//	Fill the tagstruct
+//	Return the tagstruct
 tag_t dataFromFile(char *tag, char *html_t, char *format, char *filepath){
 	
 	tag_t new;
+	int count = 0; int lines = 0;
+	char *step; char *drag;
+	char line[256];
+	memset(line, 0, 256);
+	
 	FILE *file = fopen(filepath, "r");
 	if(!file) return makeEnd();
 	
-	int count = 0; int lines = 0;
-	char line[256];
-	char *step; char *drag;
-	memset(line, 0, 256);
-	
 	fgets(line, 255, file);
 	if(strstr(line, "%FIELDS%") == line){
-		char **title = NULL;
-		char *titlestr;
 		drag = line + 8;
+		
+		char **title = NULL;
 		while((step = strchr(drag, ';'))){
-			title = realloc(title, (count + 1) * sizeof(char *));
 			*step = 0;
-			titlestr = calloc(1 + strlen(drag), sizeof(char)); // direct index this
-			strcpy(titlestr, drag);
-			title[count] = titlestr;
+			
+			title = realloc(title, (count + 1) * sizeof(char *));
+			title[count] = calloc(1 + strlen(drag), sizeof(char));
+			
+			strcpy(title[count], drag);
 			count++;
 			drag = step + 1;
 		}
@@ -146,6 +176,8 @@ tag_t dataFromFile(char *tag, char *html_t, char *format, char *filepath){
 		if(datagroup[i]) free(datagroup[i]);
 	}
 	free(datagroup);
+	
+	fclose(file);
 
 	new.cnt = lines;
 	new.left = lines;
@@ -158,13 +190,42 @@ tag_t dataFromFile(char *tag, char *html_t, char *format, char *filepath){
 	return new;
 }
 
+////
+////	Creates a datapacket from a variable argument list
+////
+//
+//	Create resources
+//	Count number of fields on a line
+//	If a title list is given:
+//		Format the title list into datastruct
+//	Load first vararg
+//	Set up datagroup buffer
+//	Loop as long as varargs last:
+//		Loop through enough values to fill a line:
+//			If datagroup buffer full:
+//				Allocate more space
+//				Clear allocated space
+//			If current datagroup slot not empty: clear slot
+//			Else: allocate space into the slot
+//			Copy vararg to the current datagroup slot
+//			Load the next vararg
+//		If datagroup buffer full:
+//			Allocate one more slot
+//			Null the slot
+//		Else: Null the current slot
+//		Allocate space to the datastruct
+//		Format the datagroup into the datastruct
+//	Free any used slots in the datagroup
+//	Free the datagroup
+//	Fill the tagstruct
+//	Return the tagstruct
 tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...){
+	
 	tag_t new;
 	va_list va_strings;
 	va_start(va_strings, title);
-	
 	int line_elements = 0;
-	int lines = 0;
+	int lines = 0; int le;
 	
 	char *scan = format;
 	while(*scan){
@@ -176,7 +237,6 @@ tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...){
 		hiddenFormatLine(title, new.data.fields, format);
 	}
 	
-	int le;
 	char *va_str = va_arg(va_strings, char*);
 	
 	const int dtgrpbuf = 10;
@@ -212,13 +272,109 @@ tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...){
 		}
 		else datagroup[le] = NULL;
 		
-		for (int i = 0; i < le; i++) {
-			printf("%d, %d : %s\n", lines, le, datagroup[0]);
-		}
 		new.data.values = realloc(new.data.values, (lines + 1) * sizeof(char*));
 		new.data.values[lines] = calloc(512, sizeof(char));
 		hiddenFormatLine(datagroup, new.data.values[lines], format);
-		printf("AFT: %s\n", new.data.values[lines]);
+		lines++;
+	}
+	
+	for (int i = 0; i < dtgrp_inuse; i++) {
+		if(datagroup[i]) free(datagroup[i]);
+	}
+	free(datagroup);
+	
+	new.cnt = lines;
+	new.left = lines;
+	new.parseFunc = NULL;
+	if(tag) strcpy(new.tag, tag);
+	if(html_t) strcpy(new.html_f, html_t);
+	
+	return new;
+}
+
+////
+////	Creates a datapacket from a list
+////
+//
+//	Create resources
+//	Count number of fields on a line
+//	If a title list is given:
+//		Format the title list into datastruct
+//	Set up datagroup buffer
+//	Loop as long as there are list elements:
+//		Loop through enough values to fill a line:
+//			If datagroup buffer full:
+//				Allocate more space
+//				Clear allocated space
+//			If current datagroup slot not empty: clear slot
+//			Else: allocate space into the slot
+//			Copy the current list element to the current datagroup slot
+//			Take the next element on the list
+//		If datagroup buffer full:
+//			Allocate one more slot
+//			Null the slot
+//		Else: Null the current slot
+//		Allocate space to the datastruct
+//		Format the datagroup into the datastruct
+//	Free any used slots in the datagroup
+//	Free the datagroup
+//	Fill the tagstruct
+//	Return the tagstruct
+tag_t dataFromList(char *tag, char *html_t, char *format, char **title, char **list){
+	
+	tag_t new;
+	int line_elements = 0;
+	int lines = 0;
+	
+	char *scan = format;
+	while(*scan){
+		if(*scan == '%' && *(scan + 1) != '%') line_elements++;
+		scan++;
+	}
+	
+	if(title) {
+		hiddenFormatLine(title, new.data.fields, format);
+	}
+	
+	int le;
+	
+	const int dtgrpbuf = 10;
+	int dtgrp_inuse = 0;
+	int dtgrp_left = dtgrpbuf;
+	char **datagroup = calloc(dtgrpbuf, sizeof(char *));
+	for (int i = 0; i < dtgrpbuf; i++){
+		datagroup[dtgrp_inuse + i] = NULL;
+	}
+	new.data.values = NULL;
+	
+	while(*list){
+		for(le = 0; (le < line_elements) && *list; le++){
+			if(dtgrp_left == 0){
+				datagroup = realloc(datagroup, (dtgrp_inuse + dtgrpbuf) * sizeof(char *));
+				for (int i = 0; i < dtgrpbuf; i++){
+					datagroup[dtgrp_inuse + i] = NULL;
+				}
+				dtgrp_left = dtgrpbuf;
+			}
+			if(datagroup[le]) memset(datagroup[le], 0, 128 * sizeof(char));
+			else{	datagroup[le] = calloc(128, sizeof(char));
+				dtgrp_inuse++; dtgrp_left--;	}
+			
+			strcpy(datagroup[le], *list);
+			list++;
+		}
+		
+		if(dtgrp_left == 0){
+			datagroup = realloc(datagroup, (dtgrp_inuse + 1) * sizeof(char *));
+			datagroup[dtgrp_inuse] = NULL;
+			dtgrp_inuse++;
+		}
+		else datagroup[le] = NULL;
+		
+		
+		new.data.values = realloc(new.data.values, (lines + 1) * sizeof(char*));
+		new.data.values[lines] = calloc(512, sizeof(char));
+		hiddenFormatLine(datagroup, new.data.values[lines], format);
 		lines++;
 	}
 	
@@ -243,9 +399,9 @@ tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...){
 ////
 
 ////
-////	Creates an empty formatting options struct
+////	Initializes an empty formatting options struct
 ////
-hidden_format_t hiddenCreateFormat(){
+hidden_format_t hiddenInitFormat(){
 	hidden_format_t format = {0, 0, 0, 0};
 	return format;
 }
@@ -265,18 +421,30 @@ void hiddenResetFormat(hidden_format_t *format){
 ////	buffers based on instructions in format buffer
 ////
 //
-//  go through format string:
-//		if character starts format tag:
-//			get formatting options
-//			write formatted data from source to target
-//		if character is a special character:
+//	Set some resources
+//  Loop through format string:
+//		Pick actions for the current character
+//		Case %: (character starts format tag)
+//			Loop until format type is specified:
+//				If formatting width not specified:
+//					Set correct option for first formatting flag
+//					If a number is found it has to define field width
+//					If no width is specified and random character met function fails
+//				Else: Next character has to define formatting type or function fails
+//			If width or presicion set unspecified: Set them to 0
+//			See difference in length between field value length and field width
+//			Format string correctly based on saved options
+//			Move to the next source list element
+//		Case //:( character is a special character)
 //			write the correct character to target
-//		otherwise write character to target
-//  return formatted string
+//		By default write the character to target
+//	Add trailing 0
+//  Return formatted string
 int hiddenFormatLine(char **source, char *target, const char *format){
 	int srcind = 0;
-	hidden_format_t settings = hiddenCreateFormat();
+	hidden_format_t settings = hiddenInitFormat();
 	const char *tmp = NULL;
+	
 	while (*format) {
 		hiddenResetFormat(&settings);
 		switch (*format) {

@@ -56,7 +56,7 @@ tag_t dataFromFile(char *tag, char *html_t, char *format, char *filepath);
 
 tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...);// NOT IMPLEMENTED
 
-tag_t dataFromList(char *tag, char *html_t, char *format, char **list);
+tag_t dataFromList(char *tag, char *html_t, char *format, char **title, char **list);
 
 // Renders the html document at 'path'
 // filling it with the given data
