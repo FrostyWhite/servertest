@@ -217,6 +217,7 @@ tag_t dataFromFile(char *tag, char *html_t, char *format, char *filepath){
 	FILE *file = fopen(filepath, "r");
 	if(!file) return makeEnd();
 	
+	new.data.fields = NULL;
 	fgets(line, 255, file);
 	if(strstr(line, "%FIELDS%") == line){
 		drag = line + 8;
@@ -339,6 +340,7 @@ tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...){
 	char *scan = format;
 	while(*scan) if(*(scan++) == '%' && *(scan + 1) != '%') line_elements++;
 	
+	new.data.fields = NULL;
 	if(title) {
 		hiddenFormatLine(title, new.data.fields, format);
 	}
@@ -433,6 +435,7 @@ tag_t dataFromList(char *tag, char *html_t, char *format, char **title, char **l
 	char *scan = format;
 	while(*scan) if(*(scan++) == '%' && *(scan + 1) != '%') line_elements++;
 	
+	new.data.fields = NULL;
 	if(title) {
 		hiddenFormatLine(title, new.data.fields, format);
 	}
