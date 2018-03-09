@@ -15,14 +15,14 @@ At the current stage only one connection is accepted at a time (and only
 within the computer). Stylesheets or other files can currently not be loaded.
 String formatting is currently ignored in browsers. Only reading data from files is currently supported.
 
-Forementioned issues will be corrected in the near future. This project is mainly a personal experiment and will
-improve little by little as I come up with new ways to expand it.
+Forementioned issues will be corrected in the near future. This project is mainly a personal experiment and will improve little by little as I come up with new ways to expand it.
 
 __Plans:__<br>
-Rewriting datastruct formating to better support varying sourcetypes
-Adding multithreading support to accept multiple clients
-Making program accept external connections instead of internal loopback
+- Proper handling of html resource requests<br>
+- Adding multithreading support to accept multiple clients<br>
+- Making program accept external connections instead of internal loopback<br>
 
 __Changelog:__<br>
 28.2. Added function for handling HTTP requests. Functionality is not yet used and functions for removing and actually using generated header struct are still under work.
 6.3. An html document can now be rendered from data contained in a file
+9.3. Versatility in creating tagstructs improved. HTML documents can now be rendered from variable argument lists and standard lists along with files.

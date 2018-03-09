@@ -92,13 +92,13 @@ int main(int argc, char *argv[]){
 		strcpy(num2.tag, "{%%HEADER%%}");
 		strcpy(num2.html_f, "h1");
 		
-		tag_t render = dataFromFile("./database/characters", "{%%CONTENT%%}", "p", "%-15a %-+20a %-20a");
+		tag_t render = dataFromFile("{%%CONTENT%%}", "p", "%-15a %-+20a %-20a", "./database/characters");
 		
 		// Ending packet so rendering function knows when to stop
 		tag_t end = makeEnd();
 		
 		// A debug print
-		//printf("%s", render_html("./files/index.html", num1, num2, num3, end));
+		//printf("%s", render_html("./files/index.html", num1, num2, render, end));
 		
 		// TEST DATA ENDS //
 		

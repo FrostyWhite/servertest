@@ -21,19 +21,10 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-// TODO: REWRITE DATA PACKET CREATION FOR MULTISOURCE SUPPORT
-// This means:
-//	Split source into a string list list (char***)
-//	and process as such
-//		va_args: take args and group them in correct numbers
-//				List the groups and pass on
-//		list: regroup list and pass on
-//		file: tokenize, regroup, pass on
-
 // Required tools and typedefinitions //
 
 typedef struct{
-	char *fields; // fromatted string containing the data fields
+	char *fields; // formatted string containing the data fields
 	char **values; // formatted datastrings
 } data_t;
 
@@ -52,11 +43,11 @@ typedef char* (*parseFunc)(tag_t);
 tag_t makeEnd();
 
 // TODO: VARIABLE TABLE ROW LENGTH
-tag_t dataFromFile(char *tag, char *html_t, char *format, char *base);
+tag_t dataFromFile(char *tag, char *html_t, char *format, char *filepath);
 
-tag_t dataFromInput(char *tag, char *html_t, char *format, char *title, ...);// NOT IMPLEMENTED
+tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...);// NOT IMPLEMENTED
 
-tag_t dataFromList(char *tag, char *html_t, char *format, char **list);
+tag_t dataFromList(char *tag, char *html_t, char *format, char **title, char **list);
 
 // Renders the html document at 'path'
 // filling it with the given data

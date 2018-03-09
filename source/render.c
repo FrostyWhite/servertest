@@ -21,13 +21,14 @@ typedef struct{
 	int width;
 } hidden_format_t;
 
-hidden_format_t hiddenCreateFormat();
-int hiddenCharsToDelim(const char *string, char delim);
+// Initializes a new formatting options structure
+hidden_format_t hiddenInitFormat();
+
+// Clears the given formatting options structure
 void hiddenResetFormat(hidden_format_t *format);
-void hiddenWriteChars(char *target, int number, char character);
-int *hiddenWriteFromSource(const char *source, char *target, const hidden_format_t *settings, const char delim);
-int hiddenNonFormattedWrite(const char *source, char *target, const char delim);
-int hiddenFormatLine(const char *source, char *target, const char *format, char delim);
+
+// Formats a list of strings
+int hiddenFormatLine(char **source, char *target, const char *format);
 
 ////
 //
@@ -117,6 +118,7 @@ char *render_html(char *path, ...){
 				strcat(render, tagdata);
 				strcat(render, (loc + strlen(tagdata)));
 				strcat(render, "\n");
+				left -= 2 + strlen(line + strlen(tagdata));
 
 				free(processed.data.values[processed.cnt - processed.left]);
 				processed.left--;
@@ -136,6 +138,7 @@ char *render_html(char *path, ...){
 			}
 
 			strcat(render, line);
+			left -= 1 + strlen(line);
 		}
 
 		memset(line, 0, 256);
@@ -162,87 +165,330 @@ tag_t makeEnd(){
 }
 
 ////
-////	Creates a datapacket from a given file
+////	Creates a datapacket from a file
 ////
 //
-//	Creating resources
-//	Open file or return only an end tag
-//	If a title is marked in data file:
-//		Format line
-//		Reset line for a new read
-//	Loop through the file:
-//		Format the read line
-//		Reset the line for a new read
-//	Store the data inside the datapacket
-//	Return the datapacket
-tag_t dataFromFile(char *base, char *tag, char *html_t, char *format){
+//	Create resources
+//	Open file or return an end tag
+//	Count number of fields on a line
+//	Read a line from file
+//	If the line contains field tag:
+//		Skip over the tag
+//		Loop through the line until no more delimiters found:
+//			Set the delimiter 0 (split the line)
+//			Allocate space for the new field
+//			Copy the current line partial to the field list
+//			Set the start of the next partial behind the end of the last one
+//		Allocate space for a trailing NULL element
+//		Allocate space for tagstruck fields field
+//		Reset the line and read a new one
+//	Set up datagroup buffer
+//	Loop through each line of the file:
+//		Set the start of the first line partial to the beginning of the line
+//		Loop through the line until no more delimiters found:
+//			If datagroup buffer full:
+//				Allocate more space
+//				Clear allocated space
+//			If current datagroup slot not empty: clear slot
+//			Else: allocate space into the slot
+//			Set the delimiter 0 (split the line)
+//			Copy the current string partial to the current datagroup slot
+//			Set the start of the next partial behind the end of the last one
+//			(new line loaded)
+//		If datagroup buffer full:
+//			Allocate one more slot
+//			Null the slot
+//		Else: Null the current slot
+//		Allocate space to the datastruct
+//		Format the datagroup into the datastruct
+//	Free any used slots in the datagroup
+//	Free the datagroup
+//	Close the file
+//	Fill the tagstruct
+//	Return the tagstruct
+tag_t dataFromFile(char *tag, char *html_t, char *format, char *filepath){
 	
-	tag_t new; int linei = 0; int count = 0;
-	data_t data; char line[256];
+	tag_t new;
+	int count = 0; int lines = 0;
+	char *step; char *drag;
+	char line[256];
 	memset(line, 0, 256);
 	
-	FILE *file = fopen(base, "r");
+	FILE *file = fopen(filepath, "r");
 	if(!file) return makeEnd();
 	
 	fgets(line, 255, file);
 	if(strstr(line, "%FIELDS%") == line){
-		linei += 8;
-		data.fields = calloc(1024, sizeof(char));
-		hiddenFormatLine(&line[linei], data.fields, format, ';');
+		drag = line + 8;
+		
+		char **title = NULL;
+		while((step = strchr(drag, ';'))){
+			*step = 0;
+			
+			title = realloc(title, (count + 1) * sizeof(char *));
+			title[count] = calloc(1 + strlen(drag), sizeof(char));
+			
+			strcpy(title[count], drag);
+			count++;
+			drag = step + 1;
+		}
+		title = realloc(title, (count + 1) * sizeof(char *));
+		title[count] = NULL;
+		
+		new.data.fields = calloc(512, sizeof(char));
+		hiddenFormatLine(title, new.data.fields, format);
 		memset(line, 0, 256);
 		fgets(line, 255, file);
+		count = 0;
 	}
-	data.values = NULL;
 	
-	do {
-		data.values = realloc(data.values, (count + 1) * sizeof(char*));
-		data.values[count] = calloc(512, sizeof(char));
-		hiddenFormatLine(line, data.values[count], format, ';');
-		count++;
-		memset(line, 0, 256);
-	} while (fgets(line, 255, file));
-	new.data = data;
-	new.cnt = count;
-	new.left = count;
-	strcpy(new.html_f, html_t);
-	strcpy(new.tag, tag);
+	new.data.values = NULL;
+	const int dtgrpbuf = 10;
+	int dtgrp_inuse = 0;
+	int dtgrp_left = dtgrpbuf;
+	char **datagroup = calloc(dtgrpbuf, sizeof(char *));
+	for (int i = 0; i < dtgrpbuf; i++){
+		datagroup[dtgrp_inuse + i] = NULL;
+	}
+	
+	do{
+		drag = line;
+		while((step = strchr(drag, ';'))){
+			if(dtgrp_left == 0){
+				datagroup = realloc(datagroup, (dtgrp_inuse + dtgrpbuf) * sizeof(char *));
+				for (int i = 0; i < dtgrpbuf; i++){
+					datagroup[dtgrp_inuse + i] = NULL;
+				}
+				dtgrp_left = dtgrpbuf;
+			}
+			if(datagroup[count]) memset(datagroup[count], 0, 128 * sizeof(char));
+			else{	datagroup[count] = calloc(128, sizeof(char));
+				dtgrp_inuse++; dtgrp_left--;	}
+			
+			*step = 0;
+			strcpy(datagroup[count++], drag);
+			drag = step + 1;
+		}
+		if(dtgrp_left == 0){
+			datagroup = realloc(datagroup, (dtgrp_inuse + 1) * sizeof(char *));
+			datagroup[dtgrp_inuse++] = NULL;
+		}
+		else datagroup[count] = NULL;
+		
+		new.data.values = realloc(new.data.values, (lines + 1) * sizeof(char*));
+		new.data.values[lines] = calloc(512, sizeof(char));
+		hiddenFormatLine(datagroup, new.data.values[lines++], format);
+		count = 0;
+	} while(fgets(line, 255, file));
+	
+	for (int i = 0; i < dtgrp_inuse; i++) {
+		if(datagroup[i]) free(datagroup[i]);
+	}
+	free(datagroup);
+	
+	fclose(file);
+	
+	new.cnt = lines;
+	new.left = lines;
 	new.parseFunc = parseTag;
+	memset(new.tag, 0, 20);
+	memset(new.html_f, 0, 10);
+	if(tag) strcpy(new.tag, tag);
+	if(html_t) strcpy(new.html_f, html_t);
+	
 	return new;
 }
 
-/*
-tag_t dataFromInput(char *tag, char *html_t, char *format, char *title, ...){
+////
+////	Creates a datapacket from a variable argument list
+////
+//
+//	Create resources
+//	Count number of fields on a line
+//	If a title list is given:
+//		Format the title list into datastruct
+//	Load first vararg
+//	Set up datagroup buffer
+//	Loop as long as varargs last:
+//		Loop through enough values to fill a line:
+//			If datagroup buffer full:
+//				Allocate more space
+//				Clear allocated space
+//			If current datagroup slot not empty: clear slot
+//			Else: allocate space into the slot
+//			Copy vararg to the current datagroup slot
+//			Load the next vararg
+//		If datagroup buffer full:
+//			Allocate one more slot
+//			Null the slot
+//		Else: Null the current slot
+//		Allocate space to the datastruct
+//		Format the datagroup into the datastruct
+//	Free any used slots in the datagroup
+//	Free the datagroup
+//	Fill the tagstruct
+//	Return the tagstruct
+tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...){
 	
 	tag_t new;
 	va_list va_strings;
 	va_start(va_strings, title);
 	int line_elements = 0;
-	int linei = 0; int count = 0;
-	char source[4096];
-	memset(source, 0, 4096);
+	int lines = 0; int le;
 	
-	while(*format){
-		if(*format == '%' && *(format + 1) != '%') line_elements++;
-		format++;
-	}
+	char *scan = format;
+	while(*scan) if(*(scan++) == '%' && *(scan + 1) != '%') line_elements++;
 	
 	if(title) {
-		new.data.fields = calloc(1 + strlen(title), sizeof(char));
-		strcpy(new.data.fields, title);
+		hiddenFormatLine(title, new.data.fields, format);
 	}
 	
-	char *processed = va_arg(va_strings, char*);
-	while (processed) {
-		for(int le = 0; (le < line_elements) && processed; le++){
-			strcat(source, processed);
-			strcat(source, ";");
-			processed = va_arg(va_strings, char*);
-		}
-		hiddenFormatLine(source, , , )
+	char *va_str = va_arg(va_strings, char*);
+	
+	const int dtgrpbuf = 10;
+	int dtgrp_inuse = 0;
+	int dtgrp_left = dtgrpbuf;
+	char **datagroup = calloc(dtgrpbuf, sizeof(char *));
+	for (int i = 0; i < dtgrpbuf; i++){
+		datagroup[dtgrp_inuse + i] = NULL;
 	}
+	new.data.values = NULL;
+	
+	while(va_str){
+		for(le = 0; (le < line_elements) && va_str; le++){
+			if(dtgrp_left == 0){
+				datagroup = realloc(datagroup, (dtgrp_inuse + dtgrpbuf) * sizeof(char *));
+				for (int i = 0; i < dtgrpbuf; i++){
+					datagroup[dtgrp_inuse + i] = NULL;
+				}
+				dtgrp_left = dtgrpbuf;
+			}
+			if(datagroup[le]) memset(datagroup[le], 0, 128 * sizeof(char));
+			else{	datagroup[le] = calloc(128, sizeof(char));
+				dtgrp_inuse++; dtgrp_left--;	}
+			
+			strcpy(datagroup[le], va_str);
+			va_str = va_arg(va_strings, char*);
+		}
+		
+		if(dtgrp_left == 0){
+			datagroup = realloc(datagroup, (dtgrp_inuse + 1) * sizeof(char *));
+			datagroup[dtgrp_inuse++] = NULL;
+		}
+		else datagroup[le] = NULL;
+		
+		new.data.values = realloc(new.data.values, (lines + 1) * sizeof(char*));
+		new.data.values[lines] = calloc(512, sizeof(char));
+		hiddenFormatLine(datagroup, new.data.values[lines++], format);
+	}
+	
+	for (int i = 0; i < dtgrp_inuse; i++) {
+		if(datagroup[i]) free(datagroup[i]);
+	}
+	free(datagroup);
+	
+	new.cnt = lines;
+	new.left = lines;
+	new.parseFunc = parseTag;
+	if(tag) strcpy(new.tag, tag);
+	if(html_t) strcpy(new.html_f, html_t);
+	
 	return new;
 }
-*/
+
+////
+////	Creates a datapacket from a list
+////
+//
+//	Create resources
+//	Count number of fields on a line
+//	If a title list is given:
+//		Format the title list into datastruct
+//	Set up datagroup buffer
+//	Loop as long as there are list elements:
+//		Loop through enough values to fill a line:
+//			If datagroup buffer full:
+//				Allocate more space
+//				Clear allocated space
+//			If current datagroup slot not empty: clear slot
+//			Else: allocate space into the slot
+//			Copy the current list element to the current datagroup slot
+//			Take the next element on the list
+//		If datagroup buffer full:
+//			Allocate one more slot
+//			Null the slot
+//		Else: Null the current slot
+//		Allocate space to the datastruct
+//		Format the datagroup into the datastruct
+//	Free any used slots in the datagroup
+//	Free the datagroup
+//	Fill the tagstruct
+//	Return the tagstruct
+tag_t dataFromList(char *tag, char *html_t, char *format, char **title, char **list){
+	
+	tag_t new;
+	int line_elements = 0;
+	int lines = 0;
+	
+	char *scan = format;
+	while(*scan) if(*(scan++) == '%' && *(scan + 1) != '%') line_elements++;
+	
+	if(title) {
+		hiddenFormatLine(title, new.data.fields, format);
+	}
+	
+	int le;
+	
+	const int dtgrpbuf = 10;
+	int dtgrp_inuse = 0;
+	int dtgrp_left = dtgrpbuf;
+	char **datagroup = calloc(dtgrpbuf, sizeof(char *));
+	for (int i = 0; i < dtgrpbuf; i++){
+		datagroup[dtgrp_inuse + i] = NULL;
+	}
+	new.data.values = NULL;
+	
+	while(*list){
+		for(le = 0; (le < line_elements) && *list; le++){
+			if(dtgrp_left == 0){
+				datagroup = realloc(datagroup, (dtgrp_inuse + dtgrpbuf) * sizeof(char *));
+				for (int i = 0; i < dtgrpbuf; i++){
+					datagroup[dtgrp_inuse + i] = NULL;
+				}
+				dtgrp_left = dtgrpbuf;
+			}
+			if(datagroup[le]) memset(datagroup[le], 0, 128 * sizeof(char));
+			else{	datagroup[le] = calloc(128, sizeof(char));
+				dtgrp_inuse++; dtgrp_left--;	}
+			
+			strcpy(datagroup[le], *(list++));
+		}
+		
+		if(dtgrp_left == 0){
+			datagroup = realloc(datagroup, (dtgrp_inuse + 1) * sizeof(char *));
+			datagroup[dtgrp_inuse++] = NULL;
+		}
+		else datagroup[le] = NULL;
+		
+		
+		new.data.values = realloc(new.data.values, (lines + 1) * sizeof(char*));
+		new.data.values[lines] = calloc(512, sizeof(char));
+		hiddenFormatLine(datagroup, new.data.values[lines++], format);
+	}
+	
+	for (int i = 0; i < dtgrp_inuse; i++) {
+		if(datagroup[i]) free(datagroup[i]);
+	}
+	free(datagroup);
+	
+	new.cnt = lines;
+	new.left = lines;
+	new.parseFunc = parseTag;
+	if(tag) strcpy(new.tag, tag);
+	if(html_t) strcpy(new.html_f, html_t);
+	
+	return new;
+}
 
 ////
 //
@@ -253,20 +499,9 @@ tag_t dataFromInput(char *tag, char *html_t, char *format, char *title, ...){
 ////
 ////	Creates an empty formatting options struct
 ////
-hidden_format_t hiddenCreateFormat(){
+hidden_format_t hiddenInitFormat(){
 	hidden_format_t format = {0, 0, 0, 0};
 	return format;
-}
-
-////
-////	Calculates the number of characters
-////	to the delimiter
-////
-int hiddenCharsToDelim(const char *string, char delim){
-	for(int chars = 0; chars < strlen(string); chars++){
-		if(*(string + chars) == delim) return chars;
-	}
-	return 0;
 }
 
 ////
@@ -280,111 +515,33 @@ void hiddenResetFormat(hidden_format_t *format){
 }
 
 ////
-////	Writes a specified number of the given
-////	character into the given buffer
-////
-void hiddenWriteChars(char *target, int number, char character){
-	for(int i = 0; i < number; i++){
-		*target = character;
-		target++;
-	}
-	return;
-}
-
-////
-////	Writes text from source buffer to the
-////	target buffer in a formatted form
-////
-//
-//	Create some resources
-//	Loop through the source until max length or delimiter:
-//		If number formatting enabled and numerics found:
-//			If number not preceeded by - add ' ' or + (based on options)
-//			Else do nothing
-//			Loop until whole number printed
-//		In general case write the character to target
-//	If max length reached before delimiter:
-//		skip characters until delimiter
-//	Return how many characters advanced in buffers
-int *hiddenWriteFromSource(const char *source, char *target, const hidden_format_t *settings, const char delim){
-	
-	int *ret = calloc(2, sizeof(int));
-	int sign = settings->flags & 2;
-	int space = settings->flags & 4;
-	unsigned int targetstep = 0;
-	unsigned int sourcestep = 0;
-	
-	while(targetstep < settings->width && *source != delim){
-		
-		if((sign || space) && (*source >= 49 && *source <= 57)){
-			
-			target--;
-			if(*target != '-'){
-				target++;
-				*target = (sign) ? '+' : ' ';
-				targetstep++; target++;
-				
-			} else target++;
-			
-			while(*source >= 48 && *source <= 57 && targetstep < settings->width){
-				*target = *source;
-				source++; target++; targetstep++;
-			}
-			
-		} else {
-			*target = *source;
-			source++; target++; targetstep++;
-		}
-	}
-	
-	sourcestep = targetstep;
-	if(targetstep >= settings->width) {
-		while(*source != delim){
-			source++; sourcestep++;
-		}
-		source++; sourcestep++;
-	}
-	else{
-		source++; sourcestep++;
-	}
-	
-	ret[0] = targetstep;
-	ret[1] = sourcestep;
-	return ret;
-}
-
-////
-////	Standard non-formatted write when no
-////	formatting options presented
-////
-//
-//	Write characters from source until delimiter
-//	Return how much buffers advanced
-int hiddenNonFormattedWrite(const char *source, char *target, const char delim){
-	int step = 0;
-	while(*source != delim){
-		*target = *source;
-		target++; source++; step++;
-	}
-	return step;
-}
-
-////
 ////	Write to target buffer from format and source
 ////	buffers based on instructions in format buffer
 ////
 //
-//  go through format string:
-//		if character starts format tag:
-//			get formatting options
-//			write formatted data from source to target
-//		if character is a special character:
+//	Set some resources
+//  Loop through format string:
+//		Pick actions for the current character
+//		Case %: (character starts format tag)
+//			Loop until format type is specified:
+//				If formatting width not specified:
+//					Set correct option for first formatting flag
+//					If a number is found it has to define field width
+//					If no width is specified and random character met function fails
+//				Else: Next character has to define formatting type or function fails
+//					Pick the corresponding character
+//					Format string correctly based on saved options
+//				Move to the next source list element
+//		Case //:( character is a special character)
 //			write the correct character to target
-//		otherwise write character to target
-//  return formatted string
-int hiddenFormatLine(const char *source, char *target, const char *format, char delim){
-	hidden_format_t settings = hiddenCreateFormat();
+//		By default write the character to target
+//	Add trailing 0
+//  Return formatted string
+int hiddenFormatLine(char **source, char *target, const char *format){
+	int srcind = 0;
+	hidden_format_t settings = hiddenInitFormat();
 	const char *tmp = NULL;
+	
 	while (*format) {
 		hiddenResetFormat(&settings);
 		switch (*format) {
@@ -415,105 +572,88 @@ int hiddenFormatLine(const char *source, char *target, const char *format, char 
 							default:
 								if(*format >= 49 && *format <= 57){
 									tmp = format;
-									while(*format >= 48 && *format <= 57){
-										format++;
-									}
+									while(*(format++) >= 48 && *format <= 57);
 									settings.width = atoi(tmp);
 								}
-								else if (*format == 'v'){
+								else if (*(format++) == 'v'){
 									settings.width = -1;
 									settings.type = 4;
-									format++;
 								}
 								else return 0;
 								break;
 						}
 					}
 					else{
-						switch (*format) {
+						int fill = 0;
+						switch (*(format++)) {
 							case 'l':
 								settings.type = 1; // Low bound
+								fill = settings.width - (int) strlen(source[srcind]);
+								if(fill < 0){
+									strcpy(target, source[srcind]);
+									target += strlen(source[srcind]);
+								}
+								else{
+									if(settings.flags & 1){
+										strcpy(target, source[srcind]);
+										target += strlen(source[srcind]);
+										memset(target, (settings.flags & 8) ? '0' : ' ', fill);
+										*(target += fill) = 0;
+									}
+									else{
+										memset(target, (settings.flags & 8) ? '0' : ' ', fill);
+										*(target += fill) = 0;
+										strcpy(target, source[srcind]);
+										target += strlen(source[srcind]);
+									}
+								}
 								break;
 							case 'h':
 								settings.type = 2; // High bound
+								strncpy(target, source[srcind], settings.width);
+								target += (strlen(source[srcind]) < settings.width) ? strlen(source[srcind]) : settings.width;
 								break;
 							case 'a':
 								settings.type = 3; // Absolute
+								fill = settings.width - (int) strlen(source[srcind]);
+								if(fill < 0){
+									strncpy(target, source[srcind], settings.width);
+									target += (strlen(source[srcind]) < settings.width) ? strlen(source[srcind]) : settings.width;
+								}
+								else{
+									if(settings.flags & 1){
+										strcpy(target, source[srcind]);
+										target += strlen(source[srcind]);
+										memset(target, (settings.flags & 8) ? '0' : ' ', fill);
+										*(target += fill) = 0;
+									}
+									else{
+										memset(target, (settings.flags & 8) ? '0' : ' ', fill);
+										*(target += fill) = 0;
+										strcpy(target, source[srcind]);
+										target += strlen(source[srcind]);
+									}
+								}
 								break;
 							case 'v':
 								settings.type = 4; // Variable
+								strcpy(target, source[srcind]);
+								target += strlen(source[srcind]);
 								break;
 							default:
 								return 0;
 								break;
 						}
-						format++;
 					}
 				}
-				if(settings.width < 0 || settings.type == 4){
-					int skip = hiddenNonFormattedWrite(source, target, delim);
-					source += skip; target += skip;
-					source++;
-				} else {
-					int fit = settings.width - hiddenCharsToDelim(source, delim);
-					if(fit > 0){
-						if(settings.type == 2) {
-							int skip = hiddenNonFormattedWrite(source, target, delim);
-							source += skip; target += skip;
-							source++;
-						}
-						else if(settings.flags & 1){
-							int *adv = hiddenWriteFromSource(source, target, &settings, delim);
-							target += adv[0];
-							source += adv[1];
-							free(adv);
-							hiddenWriteChars(target, fit, (settings.flags & 8) ? '0' : ' ');
-							target += fit;
-						} else {
-							hiddenWriteChars(target, fit, (settings.flags & 8) ? '0' : ' ');
-							target += fit;
-							int *adv = hiddenWriteFromSource(source, target, &settings, delim);
-							target += adv[0];
-							source += adv[1];
-							free(adv);
-						}
-					} else {
-						if(settings.type == 1){
-							int skip = hiddenNonFormattedWrite(source, target, delim);
-							source += skip; target += skip;
-							source++;
-						} else {
-							int *adv = hiddenWriteFromSource(source, target, &settings, delim);
-							target += adv[0];
-							source += adv[1];
-							free(adv);
-						}
-					}
-				}
-				break;
-			case '\\':
-				format++;
-				switch (*format) {
-					case 'n':
-						*target = '\n';
-						target++; format++;
-						break;
-					case 't':
-						*target = '\t';
-						target++; format++;
-						break;
-					default:
-						*target = *format;
-						target++; format++;
-						break;
-				}
+				srcind++;
 				break;
 			default:
-				*target = *format;
-				target++; format++;
+				*(target++) = *(format++);
 				break;
 		}
 	}
 	*target = 0;
 	return 1;
 }
+
