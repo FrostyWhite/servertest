@@ -21,6 +21,7 @@ __Plans:__<br>
 - Proper handling of html resource requests<br>
 - Adding multithreading support to accept multiple clients<br>
 - Making program accept external connections instead of internal loopback<br>
+- A lot of error handling!!<br>
 
 __Changelog:__<br>
 28.2. Added function for handling HTTP requests. Functionality is not yet used and functions for removing and actually using generated header struct are still under work.
