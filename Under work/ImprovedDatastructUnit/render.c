@@ -155,21 +155,19 @@ tag_t dataFromFile(char *tag, char *html_t, char *format, char *filepath){
 					dtgrp_inuse++; dtgrp_left--;	}
 			
 			*step = 0;
-			strcpy(datagroup[count], drag);
+			strcpy(datagroup[count++], drag);
 			drag = step + 1;
-			count++;
 		}
 		if(dtgrp_left == 0){
 			datagroup = realloc(datagroup, (dtgrp_inuse + 1) * sizeof(char *));
-			datagroup[dtgrp_inuse] = NULL;
-			dtgrp_inuse++;
+			datagroup[dtgrp_inuse++] = NULL;
 		}
 		else datagroup[count] = NULL;
 		
 		new.data.values = realloc(new.data.values, (lines + 1) * sizeof(char*));
 		new.data.values[lines] = calloc(512, sizeof(char));
-		hiddenFormatLine(datagroup, new.data.values[lines], format);
-		lines++; count = 0;
+		hiddenFormatLine(datagroup, new.data.values[lines++], format);
+		count = 0;
 	} while(fgets(line, 255, file));
 	
 	for (int i = 0; i < dtgrp_inuse; i++) {
@@ -228,10 +226,7 @@ tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...){
 	int lines = 0; int le;
 	
 	char *scan = format;
-	while(*scan){
-		if(*scan == '%' && *(scan + 1) != '%') line_elements++;
-		scan++;
-	}
+	while(*scan) if(*(scan++) == '%' && *(scan + 1) != '%') line_elements++;
 	
 	if(title) {
 		hiddenFormatLine(title, new.data.fields, format);
@@ -267,15 +262,13 @@ tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...){
 		
 		if(dtgrp_left == 0){
 			datagroup = realloc(datagroup, (dtgrp_inuse + 1) * sizeof(char *));
-			datagroup[dtgrp_inuse] = NULL;
-			dtgrp_inuse++;
+			datagroup[dtgrp_inuse++] = NULL;
 		}
 		else datagroup[le] = NULL;
 		
 		new.data.values = realloc(new.data.values, (lines + 1) * sizeof(char*));
 		new.data.values[lines] = calloc(512, sizeof(char));
-		hiddenFormatLine(datagroup, new.data.values[lines], format);
-		lines++;
+		hiddenFormatLine(datagroup, new.data.values[lines++], format);
 	}
 	
 	for (int i = 0; i < dtgrp_inuse; i++) {
@@ -327,10 +320,7 @@ tag_t dataFromList(char *tag, char *html_t, char *format, char **title, char **l
 	int lines = 0;
 	
 	char *scan = format;
-	while(*scan){
-		if(*scan == '%' && *(scan + 1) != '%') line_elements++;
-		scan++;
-	}
+	while(*scan) if(*(scan++) == '%' && *(scan + 1) != '%') line_elements++;
 	
 	if(title) {
 		hiddenFormatLine(title, new.data.fields, format);
@@ -360,22 +350,19 @@ tag_t dataFromList(char *tag, char *html_t, char *format, char **title, char **l
 			else{	datagroup[le] = calloc(128, sizeof(char));
 				dtgrp_inuse++; dtgrp_left--;	}
 			
-			strcpy(datagroup[le], *list);
-			list++;
+			strcpy(datagroup[le], *(list++));
 		}
 		
 		if(dtgrp_left == 0){
 			datagroup = realloc(datagroup, (dtgrp_inuse + 1) * sizeof(char *));
-			datagroup[dtgrp_inuse] = NULL;
-			dtgrp_inuse++;
+			datagroup[dtgrp_inuse++] = NULL;
 		}
 		else datagroup[le] = NULL;
 		
 		
 		new.data.values = realloc(new.data.values, (lines + 1) * sizeof(char*));
 		new.data.values[lines] = calloc(512, sizeof(char));
-		hiddenFormatLine(datagroup, new.data.values[lines], format);
-		lines++;
+		hiddenFormatLine(datagroup, new.data.values[lines++], format);
 	}
 	
 	for (int i = 0; i < dtgrp_inuse; i++) {
@@ -431,10 +418,9 @@ void hiddenResetFormat(hidden_format_t *format){
 //					If a number is found it has to define field width
 //					If no width is specified and random character met function fails
 //				Else: Next character has to define formatting type or function fails
-//			If width or presicion set unspecified: Set them to 0
-//			See difference in length between field value length and field width
-//			Format string correctly based on saved options
-//			Move to the next source list element
+//					Pick the corresponding character
+//					Format string correctly based on saved options
+//				Move to the next source list element
 //		Case //:( character is a special character)
 //			write the correct character to target
 //		By default write the character to target
@@ -475,120 +461,84 @@ int hiddenFormatLine(char **source, char *target, const char *format){
 							default:
 								if(*format >= 49 && *format <= 57){
 									tmp = format;
-									while(*format >= 48 && *format <= 57){
-										format++;
-									}
+									while(*(format++) >= 48 && *format <= 57);
 									settings.width = atoi(tmp);
 								}
-								else if (*format == 'v'){
+								else if (*(format++) == 'v'){
 									settings.width = -1;
 									settings.type = 4;
-									format++;
 								}
 								else return 0;
 								break;
 						}
 					}
 					else{
-						switch (*format) { // THIS HERE AND
+						int fill = 0;
+						switch (*(format++)) {
 							case 'l':
 								settings.type = 1; // Low bound
+								fill = settings.width - (int) strlen(source[srcind]);
+								if(fill < 0){
+									strcpy(target, source[srcind]);
+									target += strlen(source[srcind]);
+								}
+								else{
+									if(settings.flags & 1){
+										strcpy(target, source[srcind]);
+										target += strlen(source[srcind]);
+										memset(target, (settings.flags & 8) ? '0' : ' ', fill);
+										*(target += fill) = 0;
+									}
+									else{
+										memset(target, (settings.flags & 8) ? '0' : ' ', fill);
+										*(target += fill) = 0;
+										strcpy(target, source[srcind]);
+										target += strlen(source[srcind]);
+									}
+								}
 								break;
 							case 'h':
 								settings.type = 2; // High bound
+								strncpy(target, source[srcind], settings.width);
+								target += (strlen(source[srcind]) < settings.width) ? strlen(source[srcind]) : settings.width;
 								break;
 							case 'a':
 								settings.type = 3; // Absolute
+								fill = settings.width - (int) strlen(source[srcind]);
+								if(fill < 0){
+									strncpy(target, source[srcind], settings.width);
+									target += (strlen(source[srcind]) < settings.width) ? strlen(source[srcind]) : settings.width;
+								}
+								else{
+									if(settings.flags & 1){
+										strcpy(target, source[srcind]);
+										target += strlen(source[srcind]);
+										memset(target, (settings.flags & 8) ? '0' : ' ', fill);
+										*(target += fill) = 0;
+									}
+									else{
+										memset(target, (settings.flags & 8) ? '0' : ' ', fill);
+										*(target += fill) = 0;
+										strcpy(target, source[srcind]);
+										target += strlen(source[srcind]);
+									}
+								}
 								break;
 							case 'v':
 								settings.type = 4; // Variable
+								strcpy(target, source[srcind]);
+								target += strlen(source[srcind]);
 								break;
 							default:
 								return 0;
 								break;
 						}
-						format++;
 					}
-				}
-				if(settings.width < 0) settings.width = 0;
-				if(settings.presision < 0) settings.presision = 0;
-				int fill = settings.width - (int) strlen(source[srcind]);
-				switch (settings.type) { // THIS HERE COULD BE DONE BETTER (COMBINED)!!
-					case 1:
-						if(fill < 0){
-							strcpy(target, source[srcind]);
-							target += strlen(source[srcind]);
-						}
-						else{
-							if(settings.flags & 1){
-								strcpy(target, source[srcind]);
-								target += strlen(source[srcind]);
-								memset(target, (settings.flags & 8) ? '0' : ' ', fill);
-								target += fill;
-								*target = 0;
-							}
-							else{
-								memset(target, (settings.flags & 8) ? '0' : ' ', fill);
-								target += fill;
-								*target = 0;
-								strcpy(target, source[srcind]);
-								target += strlen(source[srcind]);
-							}
-						}
-						break;
-					case 2:
-						strncpy(target, source[srcind], settings.width);
-						target += (strlen(source[srcind]) < settings.width) ? strlen(source[srcind]) : settings.width;
-						break;
-					case 3:
-						if(fill < 0){
-							strncpy(target, source[srcind], settings.width);
-							target += (strlen(source[srcind]) < settings.width) ? strlen(source[srcind]) : settings.width;
-						}
-						else{
-							if(settings.flags & 1){
-								strcpy(target, source[srcind]);
-								target += strlen(source[srcind]);
-								memset(target, (settings.flags & 8) ? '0' : ' ', fill);
-								target += fill;
-								*target = 0;
-							}
-							else{
-								memset(target, (settings.flags & 8) ? '0' : ' ', fill);
-								target += fill;
-								*target = 0;
-								strcpy(target, source[srcind]);
-								target += strlen(source[srcind]);
-							}
-						}
-						break;
-					default:
-						strcpy(target, source[srcind]);
-						target += strlen(source[srcind]);
-						break;
 				}
 				srcind++;
 				break;
-			case '\\':
-				format++;
-				switch (*format) {
-					case 'n':
-						*target = '\n';
-						target++; format++;
-						break;
-					case 't':
-						*target = '\t';
-						target++; format++;
-						break;
-					default:
-						*target = *format;
-						target++; format++;
-						break;
-				}
-				break;
 			default:
-				*target = *format;
-				target++; format++;
+				*(target++) = *(format++);
 				break;
 		}
 	}
