@@ -1,5 +1,7 @@
 ## README:
 
+### Version: a1.0.5
+
 __Installation:__<br>
 Install via “make”, clean executables via “make clean”
 

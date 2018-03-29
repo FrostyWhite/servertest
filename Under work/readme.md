@@ -11,6 +11,8 @@ One more datastruct function created for easier autorendering. Added pseudocode 
 
 __28.3.2018: ImprovedBaseUnit:__<br>
 New version of the basic structure of the server. After implementation of this, the server is more expandable and supports multiple users. This version already works on a basic level (receives connections and responds with a simpple hello page) on a local area network and could technically be deployed on a server.
+####++<br>
+The unit now works as expected, however, some issues were found in rendering long strings. These problems will be corrected before the main project is updated
 <br>
 <br>
 ### Plans:<br>
