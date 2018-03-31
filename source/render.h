@@ -21,6 +21,9 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+#include "HTTPReq.h"
+#include "pages.h"
+
 // Required tools and typedefinitions //
 
 typedef struct{
@@ -36,6 +39,10 @@ typedef struct{
 	unsigned int left; // how many datastrings left unprocessed
 	char* (*parseFunc)(void *); // function used for rendering datastrings
 } tag_t;
+
+char *handleRequest(char *request);
+
+char *createResponse(char *document, char *code);
 
 // typedefinition for easier utilization of function pointer
 typedef char* (*parseFunc)(tag_t);

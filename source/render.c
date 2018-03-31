@@ -32,7 +32,39 @@ int hiddenFormatLine(char **source, char *target, const char *format);
 
 ////
 //
-//	PUBLIC FUNCTIONS
+//	HANDLING FUNCTIONS
+//
+////
+
+char *handleRequest(char *request){
+	req_t *req_data = HTTPCreate(request);
+	rsc_t pageinfo = getPage(req_data->resource);
+	return pageinfo.viewFunc(pageinfo.filepath, pageinfo.datapath, req_data);
+}
+
+char *createResponse(char *document, char *code){
+	char *response = calloc(512 + strlen(document), sizeof(char));
+	switch (atoi(code)) {
+		case 200:
+			sprintf(response, "HTTP/1.1 200 OK\nServer: Icicle Server\nConnection: close\nContent-Type: text/html; charset=UTF-8\nContent-Length: %d\n\n%s\n\n", (int) strlen(document), document);
+			free(document);
+			return response;
+			break;
+		case 404:
+			sprintf(response, "HTTP/1.1 404 Not Found\nContent-Length: %d\n\n%s\n\n", (int) strlen(document), document);
+			free(document);
+			return response;
+			break;
+		default:
+			return NULL;
+			break;
+	}
+	return NULL;
+}
+
+////
+//
+//	RENDERING FUNCTIONS
 //
 ////
 
@@ -165,6 +197,14 @@ tag_t makeEnd(){
 }
 
 ////
+//
+//	FORMATTING FUNCTIONS
+//
+////
+
+unsigned int datacth_strmax = 2048;
+
+////
 ////	Creates a datapacket from a file
 ////
 //
@@ -262,8 +302,8 @@ tag_t dataFromFile(char *tag, char *html_t, char *format, char *filepath){
 				}
 				dtgrp_left = dtgrpbuf;
 			}
-			if(datagroup[count]) memset(datagroup[count], 0, 128 * sizeof(char));
-			else{	datagroup[count] = calloc(128, sizeof(char));
+			if(datagroup[count]) memset(datagroup[count], 0, datacth_strmax * sizeof(char));
+			else{	datagroup[count] = calloc(datacth_strmax, sizeof(char));
 				dtgrp_inuse++; dtgrp_left--;	}
 			
 			*step = 0;
@@ -365,8 +405,8 @@ tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...){
 				}
 				dtgrp_left = dtgrpbuf;
 			}
-			if(datagroup[le]) memset(datagroup[le], 0, 128 * sizeof(char));
-			else{	datagroup[le] = calloc(128, sizeof(char));
+			if(datagroup[le]) memset(datagroup[le], 0, datacth_strmax * sizeof(char));
+			else{	datagroup[le] = calloc(datacth_strmax, sizeof(char));
 				dtgrp_inuse++; dtgrp_left--;	}
 			
 			strcpy(datagroup[le], va_str);
@@ -460,8 +500,8 @@ tag_t dataFromList(char *tag, char *html_t, char *format, char **title, char **l
 				}
 				dtgrp_left = dtgrpbuf;
 			}
-			if(datagroup[le]) memset(datagroup[le], 0, 128 * sizeof(char));
-			else{	datagroup[le] = calloc(128, sizeof(char));
+			if(datagroup[le]) memset(datagroup[le], 0, datacth_strmax * sizeof(char));
+			else{	datagroup[le] = calloc(datacth_strmax, sizeof(char));
 				dtgrp_inuse++; dtgrp_left--;	}
 			
 			strcpy(datagroup[le], *(list++));
@@ -495,7 +535,7 @@ tag_t dataFromList(char *tag, char *html_t, char *format, char **title, char **l
 
 ////
 //
-//	HIDDEN UTILITY FUNCTIONS
+//	HIDDEN UTILITIES
 //
 ////
 

@@ -8,13 +8,10 @@
 
 #include "HTTPReq.h"
 
-#include <string.h>
-#include <stdlib.h>
-
 req_t *HTTPCreate(char *request){
 	req_t *target = calloc(1, sizeof(req_t));
 	target->additionals = NULL;
-	char *ptr = NULL;
+	char *ptr = request;
 	int line = 0; int fieldi = 0;
 	while(*ptr != ' '){
 		target->method[fieldi] = *ptr;

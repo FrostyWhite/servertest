@@ -10,6 +10,8 @@
 #define HTTPReq_h
 
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 typedef struct{
 	char field[64];
@@ -22,6 +24,9 @@ typedef struct{
 	char protocol[16];
 	field_t *additionals;
 }req_t;
+
+
+char *handleRequest(char *request);
 
 req_t *HTTPCreate(char *request);
 

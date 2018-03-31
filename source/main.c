@@ -1,109 +1,116 @@
 //
-//  main.cpp
-//  networkcomms
+//  main.c
+//  ImprovedBaseUnit
 //
-//  Created by Kuura Parkkola on 18/02/2018.
+//  Created by Kuura Parkkola on 27/03/2018.
 //  Copyright © 2018 Kuura Parkkola. All rights reserved.
 //
 
-// C standard library dependencies
 #include <stdio.h>
-#include <string.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <stdlib.h>
+#include <arpa/inet.h>
+#include <strings.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <stdarg.h>
+#include <pthread.h>
+#include <stdlib.h>
 
 #include "render.h"
-#include "HTTPReq.h"
 
-// Implementation in progress
-char *handle_HTTP(char *request){
-	if(strstr(request, "GET") == request){
+int run = 1;
+int active = 0;
+
+void *clithread(void *args){
+	int clientsock = *((int *) args);
+	pthread_detach(pthread_self());
+	
+	active++;
+	
+	printf("\nClient being served\n");
+	
+	char request[2048] = {0};
+	char *response = NULL;
+	ssize_t n;
+	
+	while ((n = read(clientsock, request, 2047)) > 0) {
 		
-	} else if (strstr(request, "POST") == request){
-		return "HTTP/1.1 501 Not Implemented\r\n\r\n";
+		response = handleRequest(request);
+		printf("\n\n\tFrom client:\n");
+		//char body[] = "<!DOCTYPE HTML>\n<HTML>\n\t<HEAD>\n\t\t<title>Tespage</title>\n\t</head>\n\t<body>\n\t\t<h1>Hello world!!</h1>\n\t\t<p>I am very pleased to meet you!</p>\n\t</body>\n</html>";
+		//char header[] = "HTTP/1.1 200 OK\nContent-Type: text/html\nServer: Icicle a1.0\nConnection: Close";
+		//char response[2048] = {0};
+		//sprintf(response, "%s\nContent-Length: %d\n\n%s\n\n", header, (int) strlen(body), body);
+		write(STDOUT_FILENO, request, n);
+		
+		printf("\n\n\tTo client:\n");
+		write(STDOUT_FILENO, response, strlen(response));
+		
+		write(clientsock, response, strlen(response));
+		free(response);
+		memset(request, 0, 2048);
+		
 	}
-	return NULL;
+	
+	printf("\nClient has left\n");
+	
+	close(clientsock);
+	active--;
+	
+	pthread_exit(NULL);
 }
 
-int main(int argc, char *argv[]){
+int main(int argc, const char * argv[]) {
 	
-	// REQ CTRL //
+	pthread_t newtid;
 	
-	// responce for valid HTTP request
-	char header[2048] = "HTTP/1.1 200 OK\r\n\r\n";
+	int listenfd, connfd;
+	socklen_t len;
+	struct sockaddr_in6 servaddr, cliaddr;
+	char buff[80];
 	
-	// Creating TCP socket
-	int localsocket = socket(AF_INET, SOCK_STREAM, 0);
-	
-	// Creating the local address
-	struct sockaddr_in local_addr;
-	local_addr.sin_family = AF_INET;
-	local_addr.sin_port = htons(8001);
-	local_addr.sin_addr.s_addr = INADDR_ANY;
-	
-	// Binding the socket and the address
-	bind(localsocket, (struct sockaddr *) &local_addr, sizeof(local_addr));
-	
-	// Opening the TCP socket in the local address
-	listen(localsocket, 15);
-	
-	// Creating resources for accepting client requests
-	// and responding to them
-	int clientat;
-	char ret[4096];
-	char *response;
-	char httpresponse[4096];
-	memset(httpresponse, 0, 4096);
-	// ^^^ MEMSET THIS!!
-	
-	// Server runloop
-	while(1){
-		
-		// TEST DATA //
-		tag_t title = dataFromVA("{%%TITLE%%}", "title", "%1v", NULL, "Actorpage", NULL);
-		
-		tag_t head = dataFromVA("{%%HEADER%%}", "h1", "%1v", NULL, "Cool actors", NULL);
-		
-		tag_t render = dataFromFile("{%%CONTENT%%}", "p", "%-15a %-+20a %-20a", "./database/characters");
-		
-		// A debug print
-		//printf("%s", render_html("./files/index.html", num1, num2, render, end));
-		
-		// TEST DATA ENDS //
-		
-		// blocks until client sends request
-		clientat = accept(localsocket, NULL, NULL);
-		
-		// receives client first request
-		recv(clientat, &ret, sizeof(ret), 0);
-		
-		printf("%s", ret);
-		
-		// renders a responce html document
-		response = render_html("./files/index.html", title, head, render, makeEnd());
-		
-		// forms the actual http responce
-		sprintf(httpresponse, "%s%s\r\n\r\n", header, response);
-		
-		//Debug print
-		//printf("%s\n\n", httpresponse);
-		
-		// Sends the response
-		send(clientat, httpresponse, sizeof(httpresponse), 0);
-		
-		// Closes the connection to give space for other
-		// connections as only one is accepted at a given time
-		close(clientat);
+	if ((listenfd = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
+		perror("socket");
+		return -1;
 	}
 	
-	// REQ CTRL ENDS //
+	memset(&servaddr, 0, sizeof(servaddr));
+	servaddr.sin6_family = AF_INET6;
+	servaddr.sin6_addr = in6addr_any;
+	servaddr.sin6_port = htons(8888);
 	
-	// Program never reaches this point
-	// and is closed via a signal
+	if (bind(listenfd, (struct sockaddr *) &servaddr,
+			 sizeof(servaddr)) < 0) {
+		perror("bind");
+		return -1;
+	}
+	
+	if (listen(listenfd, 5) < 0) {
+		perror("listen");
+		return -1;
+	}
+	
+	printf("Run: %d\n", run);
+	
+	while((connfd = accept(listenfd, (struct sockaddr *) &cliaddr,
+						   &len)) >= 0) {
+		len = sizeof(cliaddr);
+		
+		printf("Client from %s, port %d entered\n",
+			   inet_ntop(AF_INET6, &cliaddr.sin6_addr,
+						 buff, sizeof(buff)), ntohs(cliaddr.sin6_port));
+		
+		pthread_create(&newtid, NULL, clithread, &connfd);
+		
+		printf("Active clients: %d\n", active);
+		
+		printf("Run: %d\n", run);
+	}
+	
+	close(listenfd);
+	
+	while(active){
+		sleep(5);
+	}
+	
 	return 0;
 }
