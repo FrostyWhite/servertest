@@ -1,9 +1,9 @@
 ## README:
 
 ### Version: a1.0.5
+(The source folder will not be updated until version 2 - See "Under Work")
 
-#### The program is tested functional on MacOS 10.13.
-#### It should also be functional with other unix systems with minor changes.
+#### The program is tested functional on MacOS 10.13. It should also be functional with other unix systems with minor changes.
 
 __Installation:__<br>
 Install via “make”, clean executables via “make clean”
