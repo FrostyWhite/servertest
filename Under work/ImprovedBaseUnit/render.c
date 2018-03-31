@@ -202,6 +202,8 @@ tag_t makeEnd(){
 //
 ////
 
+unsigned int datacth_strmax = 2048;
+
 ////
 ////	Creates a datapacket from a file
 ////
@@ -300,8 +302,8 @@ tag_t dataFromFile(char *tag, char *html_t, char *format, char *filepath){
 				}
 				dtgrp_left = dtgrpbuf;
 			}
-			if(datagroup[count]) memset(datagroup[count], 0, 128 * sizeof(char));
-			else{	datagroup[count] = calloc(128, sizeof(char));
+			if(datagroup[count]) memset(datagroup[count], 0, datacth_strmax * sizeof(char));
+			else{	datagroup[count] = calloc(datacth_strmax, sizeof(char));
 				dtgrp_inuse++; dtgrp_left--;	}
 			
 			*step = 0;
@@ -403,8 +405,8 @@ tag_t dataFromVA(char *tag, char *html_t, char *format, char **title, ...){
 				}
 				dtgrp_left = dtgrpbuf;
 			}
-			if(datagroup[le]) memset(datagroup[le], 0, 128 * sizeof(char));
-			else{	datagroup[le] = calloc(128, sizeof(char));
+			if(datagroup[le]) memset(datagroup[le], 0, datacth_strmax * sizeof(char));
+			else{	datagroup[le] = calloc(datacth_strmax, sizeof(char));
 				dtgrp_inuse++; dtgrp_left--;	}
 			
 			strcpy(datagroup[le], va_str);
@@ -498,8 +500,8 @@ tag_t dataFromList(char *tag, char *html_t, char *format, char **title, char **l
 				}
 				dtgrp_left = dtgrpbuf;
 			}
-			if(datagroup[le]) memset(datagroup[le], 0, 128 * sizeof(char));
-			else{	datagroup[le] = calloc(128, sizeof(char));
+			if(datagroup[le]) memset(datagroup[le], 0, datacth_strmax * sizeof(char));
+			else{	datagroup[le] = calloc(datacth_strmax, sizeof(char));
 				dtgrp_inuse++; dtgrp_left--;	}
 			
 			strcpy(datagroup[le], *(list++));

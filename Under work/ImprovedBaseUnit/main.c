@@ -76,7 +76,7 @@ int main(int argc, const char * argv[]) {
 	memset(&servaddr, 0, sizeof(servaddr));
 	servaddr.sin6_family = AF_INET6;
 	servaddr.sin6_addr = in6addr_any;
-	servaddr.sin6_port = htons(8889);
+	servaddr.sin6_port = htons(8888);
 	
 	if (bind(listenfd, (struct sockaddr *) &servaddr,
 			 sizeof(servaddr)) < 0) {
